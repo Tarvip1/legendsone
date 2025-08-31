@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>กำลังเชื่อมต่อเซิร์ฟเวอร์...</title>
+  <style>
+    :root {
+      --bg1:#0b0b0b; --bg2:#1a1a1a; --acc:#00e6ac;
+      --soft:#ffffff22; --text:#f5f5f5; --sub:#bdbdbd;
+      --card-bg:rgba(20,20,20,0.75);
+    }
+    body.light {
+      --bg1:#fafafa; --bg2:#f0f0f0; --acc:#007aff;
+      --soft:#00000022; --text:#1a1a1a; --sub:#555;
+      --card-bg:rgba(255,255,255,0.85);
+    }
+
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      font-family:'Segoe UI',sans-serif;
+      background:radial-gradient(circle at top,var(--bg1),var(--bg2));
+      color:var(--text);
+      display:flex;justify-content:center;align-items:center;height:100vh;
+      transition:.3s;
+    }
+    .card{
+      width:min(520px,92vw);
+      background:var(--card-bg);
+      backdrop-filter:blur(18px) saturate(150%);
+      padding:40px 32px;
+      border-radius:28px;
+      border:1px solid var(--soft);
+      text-align:center;
+      box-shadow:0 20px 50px rgba(0,0,0,0.5);
+      animation:fadeIn .6s ease;
+    }
+    @keyframes fadeIn{from{opacity:0;transform:translateY(15px);}to{opacity:1;transform:none;}}
+
+    .ring{
+      width:120px;height:120px;margin:0 auto 22px;
+      border:12px solid var(--soft);
+      border-top-color:var(--acc);
+      border-radius:50%;
+      animation:spin .9s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    h1{font-size:26px;font-weight:700;margin:8px 0;}
+    p{font-size:15px;color:var(--sub);}
+
+    .bar{
+      margin:22px auto 18px;
+      width:100%;height:12px;
+      border-radius:999px;background:var(--soft);
+      overflow:hidden;position:relative;
+    }
+    .bar>i{
+      display:block;height:100%;width:30%;
+      background:linear-gradient(90deg,transparent,var(--acc),transparent);
+      border-radius:999px;
+      animation:progress 1.8s ease-in-out infinite;
+    }
+    @keyframes progress{0%{margin-left:-30%}50%{margin-left:50%}100%{margin-left:120%}}
+
+    .list{
+      text-align:left;margin-top:14px;font-size:14px;
+      color:var(--text);padding:6px 8px;
+      max-height:140px;overflow-y:auto;
+      background:var(--soft);
+      border-radius:12px;
+    }
+
+    .actions{
+      display:flex;gap:14px;justify-content:center;margin-top:22px;
+    }
+    .btn{
+      appearance:none;border:none;
+      color:#fff;background:var(--acc);
+      padding:12px 20px;
+      border-radius:14px;cursor:pointer;
+      transition:.25s;font-size:14px;font-weight:600;
+      box-shadow:0 4px 10px rgba(0,0,0,0.25);
+    }
+    .btn:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,0.35);}
+    .btn:active{transform:scale(0.96);}
+    body.light .btn{background:var(--acc);color:#fff;}
+
+    .muted{color:var(--sub);font-size:13px;margin-top:12px;}
+
+    .theme-toggle{
+      position:absolute;top:20px;right:20px;
+      padding:8px 14px;border:none;border-radius:10px;
+      cursor:pointer;background:var(--acc);color:#fff;font-weight:bold;transition:.3s;
+      box-shadow:0 3px 8px rgba(0,0,0,0.25);
+    }
+    .theme-toggle:hover{transform:scale(1.05);}
+    body.light .theme-toggle{background:#333;color:#fff;}
+
+    a{color:var(--acc);text-decoration:none;font-weight:600;}
+    a:hover{text-decoration:underline;}
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" id="themeBtn">🌙 Dark</button>
+  <div class="card">
+    <div class="ring"></div>
+    <h1 id="title">กำลังตรวจสอบเซิร์ฟเวอร์…</h1>
+    <p id="subtitle">ถ้าลิงก์แรกเข้าไม่ได้ 5 วินาที จะข้ามไปลิงก์ถัดไป</p>
+    <div class="bar"><i></i></div>
+    <div class="list" id="status"></div>
+    <div class="actions">
+      <button class="btn" id="skip">⏭️ ข้าม</button>
+      <button class="btn" id="retry" style="display:none;">🔄 ลองใหม่</button>
+    </div>
+    <div class="muted">ระบบจะพยายามเชื่อมต่อให้อัตโนมัติ</div>
+  </div>
+
+  <!-- 🔊 เสียงแจ้งเตือน -->
+  <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+  <script>
+const ENCODED_URLS = [
+  "aHR0cHM6Ly9sZWdlbmQxNDctTGlseXZpYS5zdG9yZQ=="  
+];
+const URLS=ENCODED_URLS.map(u=>atob(u));
+const TIMEOUT_MS=5000;
+const statusEl=document.getElementById('status');
+const btnSkip=document.getElementById('skip');
+const btnRetry=document.getElementById('retry');
+const beep=document.getElementById('beep');
+const titleEl=document.getElementById('title');
+const subtitleEl=document.getElementById('subtitle');
+let leftPage=false;
+let countdownTimer;
+
+window.addEventListener('pagehide',()=>leftPage=true,{once:true});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')leftPage=true;});
+
+function log(msg){
+  const line=document.createElement('div');
+  line.innerHTML=msg;
+  statusEl.appendChild(line);
+  statusEl.scrollTop=statusEl.scrollHeight;
+}
+
+function playBeep(){ 
+  beep.currentTime=0; 
+  beep.play().catch(()=>{}); 
+}
+
+function tryLink(i){
+  if(i>=URLS.length){
+    log('❌ ไม่พบลิงก์ที่พร้อมใช้งาน');
+    titleEl.textContent='เชื่อมต่อไม่สำเร็จ';
+    subtitleEl.textContent='กรุณาลองใหม่อีกครั้ง';
+    btnRetry.style.display='inline-block';
+    btnSkip.style.display='none';
+    return;
+  }
+  const url=URLS[i];
+  log(`⏳ กำลังลองลิงก์ ${i+1}... <a href="${url}" target="_blank">เปิดเอง</a>`);
+  playBeep();
+
+  let secs = TIMEOUT_MS/1000;
+  titleEl.textContent=`กำลังตรวจสอบเซิร์ฟเวอร์… (${secs}s)`;
+  clearInterval(countdownTimer);
+  countdownTimer=setInterval(()=>{
+    secs--;
+    if(secs>=0) titleEl.textContent=`กำลังตรวจสอบเซิร์ฟเวอร์… (${secs}s)`;
+  },1000);
+
+  const timer=setTimeout(()=>{
+    clearInterval(countdownTimer);
+    if(!leftPage){log(`⚠️ ลิงก์ ${i+1} ไม่ตอบสนอง → ข้าม`);tryLink(i+1);}
+  },TIMEOUT_MS);
+
+  try{window.top.location.href=url;}catch(e){window.location.assign(url);} 
+
+  btnSkip.onclick=()=>{
+    clearTimeout(timer);
+    clearInterval(countdownTimer);
+    if(!leftPage){log('⏩ ข้ามไปลิงก์ถัดไป');playBeep();tryLink(i+1);}
+  };
+}
+
+btnRetry.onclick=()=>{
+  statusEl.innerHTML='';
+  leftPage=false;
+  btnRetry.style.display='none';
+  btnSkip.style.display='inline-block';
+  tryLink(0);
+};
+
+tryLink(0);
+
+// 🌗 Dark/Light Mode
+const themeBtn=document.getElementById('themeBtn');
+themeBtn.addEventListener('click',()=>{
+  document.body.classList.toggle('light');
+  themeBtn.textContent=document.body.classList.contains('light')?'🌞 Light':'🌙 Dark';
+});
+  </script>
+</body>
+</html>
